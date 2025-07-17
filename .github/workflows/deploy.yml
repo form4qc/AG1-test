@@ -44,3 +44,27 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/ag1-test:latest
 
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Déployer sur le VPS via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          script: |
+            # Se connecter au registre de conteneurs de GitHub
+            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            # Tirer (pull) la dernière version de l'image
+            docker pull ghcr.io/${{ github.repository_owner }}/ag1-test:latest
+            
+            # Arrêter et supprimer le conteneur existant s'il y en a un
+            docker stop ag1-test-container || true
+            docker rm ag1-test-container || true
+            
+            # Lancer le nouveau conteneur avec la nouvelle image
+            docker run -d -p 80:80 --name ag1-test-container ghcr.io/${{ github.repository_owner }}/ag1-test:latest
+
