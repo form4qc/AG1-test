@@ -26,16 +26,29 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 3. Construire l'image Docker et la pousser sur le registre
+      # 3. Générer les tags d'image en minuscules
+      - name: Generate lowercase image tags
+        id: docker_meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      # 4. Construire l'image Docker et la pousser sur le registre
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
           context: .
           push: true
-          # Nom de l'image : ghcr.io/VOTRE_NOM_UTILISATEUR/NOM_DU_DEPOT:latest
-          tags: ghcr.io/${{ github.repository }}:latest
+          tags: ${{ steps.docker_meta.outputs.tags }}
+          labels: ${{ steps.docker_meta.outputs.labels }}
 
-      # 4. Se connecter au VPS et déployer la nouvelle image
+      # 5. Se connecter au VPS et déployer la nouvelle image
       - name: Déployer sur le VPS via SSH
         uses: appleboy/ssh-action@master
         with:
@@ -46,7 +59,7 @@ jobs:
             # Se connecter au registre de conteneurs de GitHub
             echo ${{ secrets.DOCKERHUB_TOKEN }} | docker login ghcr.io -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
             
-            # Tirer (pull) la dernière version de l'image
+            # Tirer (pull) la dernière version de l'image (en minuscules)
             docker pull ghcr.io/${{ github.repository }}:latest
             
             # Arrêter et supprimer le conteneur existant s'il y en a un
